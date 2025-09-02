@@ -1,3 +1,4 @@
+google.generativeai
 av==14.4.0
 Flask==3.1.2
 numpy==2.3.2
