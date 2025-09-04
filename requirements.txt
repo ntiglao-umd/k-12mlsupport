@@ -1,12 +1,5 @@
-google-generativeai==0.8.3
 av==14.4.0
 Flask==3.1.2
-numpy==2.3.2
-protobuf==6.32.0
-PyPDF2==3.0.1
-speechrecognition==3.14.3
-streamlit==1.47.0
-streamlit_webrtc==0.63.4
 absl-py==2.1.0
 aiohttp==3.9.3
 aioice==0.10.1
