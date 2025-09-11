@@ -1,19 +1,27 @@
 import streamlit as st
-import google.generativeai as genai
+# import google.generativeai as genai
 import PyPDF2
+from openai import OpenAI
 
 # --- Load API key securely ---
-API_KEY = st.secrets["GEMINI_API_KEY"]
-genai.configure(api_key=API_KEY)
+# API_KEY = st.secrets["GEMINI_API_KEY"]
+# genai.configure(api_key=API_KEY)
 
-def list_gemini_models():
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            print(m.name)
+# def list_gemini_models():
+#     for m in genai.list_models():
+#         if 'generateContent' in m.supported_generation_methods:
+#             print(m.name)
         
 # --- Initialize Gemini model ---
 #model = genai.GenerativeModel("gemini-pro")
-model = genai.GenerativeModel("models/gemini-1.5-flash-latest")
+# model = genai.GenerativeModel("models/gemini-1.5-flash-latest")
+HUGGINGFACEHUB_ACCESS_TOKEN = st.secrets["HUGGINGFACEHUB_ACCESS_TOKEN"]
+
+client = OpenAI(
+    base_url="https://router.huggingface.co/v1",
+    api_key=HUGGINGFACEHUB_ACCESS_TOKEN,
+)
+
 
 # --- Helper function to extract text from PDFs ---
 def extract_text_from_pdfs(files):
@@ -91,11 +99,22 @@ if st.button("🔁 Revise Lessons"):
                     prompt += f"Instruction: {custom_instruction.strip()}"
 
                 # Get response from Gemini
-                response = model.generate_content(prompt)
+                # response = model.generate_content(prompt)
+
+                response = client.chat.completions.create(
+                    model="openai/gpt-oss-120b:novita",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                )
+                answer = response.choices[0].message.content
                 
                 # Display the result
                 st.success("📝 Revised Lesson Content")
-                st.markdown(response.text)
+                st.markdown(answer)
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
