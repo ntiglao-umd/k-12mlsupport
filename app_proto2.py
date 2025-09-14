@@ -159,34 +159,30 @@ if st.button("🔁 Revise Lessons"):
     else:
         with st.spinner("Indexing knowledge, retrieving evidence, and revising lessons..."):
             try:
-                # Cache-friendly: convert uploaded files to (name, bytes)
+                # --- Build or reuse index (cache-friendly) ---
                 k_files_serialized = [(f.name, f.read()) for f in knowledge_files]
-                # Build or reuse index
                 index = _cached_index(k_files_serialized, chunk_size, overlap)
 
-                # Extract lessons & compose a single query from all lessons (simple but effective)
+                # --- Extract lessons/companion text ---
                 lesson_text = extract_text_from_pdfs(lesson_files)
                 companion_text = extract_text_from_pdfs(companion_files) if companion_files else ""
 
-                # Validate lesson text
+                # --- Validate ---
                 if not lesson_text.strip() and not companion_text.strip():
                     st.warning("No extractable text found in Lesson PDFs or companion materials.")
                     st.stop()
 
-# Combine lesson + companion for retrieval/prompt
-combined_lesson_text = lesson_text
-if companion_text.strip():
-    combined_lesson_text = (
-        f"{lesson_text}\n\n--- COMPANION MATERIALS ---\n{companion_text}"
-    )
+                # --- Combine lesson + companion for retrieval/prompt ---
+                combined_lesson_text = lesson_text
+                if companion_text.strip():
+                    combined_lesson_text = (
+                        f"{lesson_text}\n\n--- COMPANION MATERIALS ---\n{companion_text}"
+                    )
 
-# Retrieve top‑K chunks using the combined text
-hits = retrieve(index, combined_lesson_text, top_k=k_top)
+                # --- Retrieve top‑K chunks using the combined text ---
+                hits = retrieve(index, combined_lesson_text, top_k=k_top)
 
-                # Retrieve top‑K chunks w.r.t. the lesson content
-                hits = retrieve(index, lesson_text, top_k=k_top)
-
-                # Prepare numbered knowledge blocks with inline citation tags [K1], [K2], ...
+                # --- Prepare numbered knowledge blocks with inline tags ---
                 numbered_blocks = []
                 for i, (chunk, score) in enumerate(hits, start=1):
                     tag = f"[K{i}]"
@@ -204,7 +200,7 @@ hits = retrieve(index, combined_lesson_text, top_k=k_top)
                         with st.expander(f"{header}  (similarity={score:.3f})"):
                             st.write(snippet)
 
-                # Build final prompt with citations guidance
+                # --- Build final prompt with citations guidance ---
                 knowledge_block_text = "\n\n".join(
                     f"{tag} {header}\n{snippet}"
                     for tag, header, snippet, _ in numbered_blocks
@@ -249,7 +245,7 @@ If sources are insufficient, say so and propose safe, clearly-labeled general be
 
                 final_user_prompt += "Now produce the revised lesson, rationale, and checklist with inline [Ki] citations."
 
-                # Call your HF‑router model via OpenAI client
+                # --- Call HF Router via OpenAI client ---
                 response = client.chat.completions.create(
                     model="openai/gpt-oss-120b:novita",
                     messages=[
@@ -264,4 +260,5 @@ If sources are insufficient, say so and propose safe, clearly-labeled general be
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
+
 
