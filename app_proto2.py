@@ -139,8 +139,6 @@ custom_instruction = st.text_area(
     placeholder="E.g., 'Make the lesson easier for high school students' or 'Align with AI ethics principles'"
 )
 
-lesson_text = extract_text_from_pdfs(lesson_files)
-
 # Cache the RAG index so we don’t rebuild on every click
 @st.cache_resource(show_spinner=False)
 def _cached_index(_files_bytes_and_names, chunk_size, overlap):
@@ -168,9 +166,22 @@ if st.button("🔁 Revise Lessons"):
 
                 # Extract lessons & compose a single query from all lessons (simple but effective)
                 lesson_text = extract_text_from_pdfs(lesson_files)
-                if not lesson_text.strip():
-                    st.warning("No extractable text found in Lesson PDFs.")
+                companion_text = extract_text_from_pdfs(companion_files) if companion_files else ""
+
+                # Validate lesson text
+                if not lesson_text.strip() and not companion_text.strip():
+                    st.warning("No extractable text found in Lesson PDFs or companion materials.")
                     st.stop()
+
+# Combine lesson + companion for retrieval/prompt
+combined_lesson_text = lesson_text
+if companion_text.strip():
+    combined_lesson_text = (
+        f"{lesson_text}\n\n--- COMPANION MATERIALS ---\n{companion_text}"
+    )
+
+# Retrieve top‑K chunks using the combined text
+hits = retrieve(index, combined_lesson_text, top_k=k_top)
 
                 # Retrieve top‑K chunks w.r.t. the lesson content
                 hits = retrieve(index, lesson_text, top_k=k_top)
@@ -230,7 +241,7 @@ If sources are insufficient, say so and propose safe, clearly-labeled general be
 
                 final_user_prompt = (
                     f"Knowledge sources (ranked):\n\n{knowledge_block_text}\n\n"
-                    f"Lesson(s) to revise:\n\n{lesson_text}\n\n"
+                    f"Lesson(s) to revise and companion materials:\n\n{combined_lesson_text}\n\n"
                 )
 
                 if custom_instruction.strip():
