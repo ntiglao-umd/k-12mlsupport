@@ -120,12 +120,26 @@ with st.sidebar:
     show_snippets = st.checkbox("Show retrieved snippets", value=True)
 
 knowledge_files = st.file_uploader("📘 Upload Knowledge PDFs (for context)", type="pdf", accept_multiple_files=True)
-lesson_files = st.file_uploader("📗 Upload Lesson PDFs (to revise or enhance)", type="pdf", accept_multiple_files=True)
+#lesson_files = st.file_uploader("📗 Upload Lesson PDFs (to revise or enhance)", type="pdf", accept_multiple_files=True)
 
+lesson_files = st.file_uploader(
+    "📗 Upload Lesson PDFs (to revise or enhance)", 
+    type="pdf", 
+    accept_multiple_files=True
+)
+
+# NEW: optional companion materials (works with PDFs for now)
+companion_files = st.file_uploader(
+    "📙 Upload Lesson Companion Materials (optional, PDF)",
+    type="pdf",
+    accept_multiple_files=True
+)
 custom_instruction = st.text_area(
     "✏️ Optional: Add custom instructions for revising the lesson",
     placeholder="E.g., 'Make the lesson easier for high school students' or 'Align with AI ethics principles'"
 )
+
+lesson_text = extract_text_from_pdfs(lesson_files)
 
 # Cache the RAG index so we don’t rebuild on every click
 @st.cache_resource(show_spinner=False)
