@@ -216,6 +216,7 @@ Deliverables:
 1) A revised lesson plan (concise and implementable today).
 2) A brief rationale (what changed and why) tied to sources via [Ki] tags.
 3) A short checklist for the teacher.
+4) Customized version of the companion materials, if any.
 
 Design principles:
 - Active, student-centered, inquiry-based, differentiated.
