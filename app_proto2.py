@@ -22,7 +22,7 @@ client = OpenAI(
     api_key=HUGGINGFACEHUB_ACCESS_TOKEN,
 )
 
-OPENAI_MODEL = "penai/gpt-oss-120b:novita"
+OPENAI_MODEL = "openai/gpt-oss-120b:novita"
 # =========================
 # PDF utilities
 # =========================
@@ -331,51 +331,50 @@ with chat_container:
 user_input = st.chat_input("Enter your message...")
 
 if user_input:
-
-    st.session_state.messages.append({
-        "role": "user", 
-        "content": user_input
-    })
-
-    st.session_state.conv_history.append({
-        "role": "user", 
-        "content": user_input
-    })
-    
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    if pedagogy_block == "" or final_user_prompt == "":
-        # --- Call HF Router via OpenAI client ---
-        with st.spinner("Indexing knowledge, retrieving evidence, and revising lessons..."):
-            try:
-                response = client.chat.completions.create(
-                    model=OPENAI_MODEL,
-                    messages=st.session_state.messages,
-                )
-
-                answer = response.choices[0].message.content
-
-            except Exception as e:
-                answer = "Error: Unable to process your request at this time."
-                st.error(f"An error occurred: {e}")
-
-
-       
-
-        bot_reply = answer
-
-        with st.chat_message("assistant"):
-            st.markdown(bot_reply)
-
+    with chat_container:
         st.session_state.messages.append({
-            "role": "assistant", 
-            "content": bot_reply
+            "role": "user", 
+            "content": user_input
         })
 
         st.session_state.conv_history.append({
-            "role": "assistant", 
-            "content": bot_reply
+            "role": "user", 
+            "content": user_input
         })
-    
+        
+        with st.chat_message("user"):
+            st.markdown(user_input)
 
+        if pedagogy_block == "" or final_user_prompt == "":
+            # --- Call HF Router via OpenAI client ---
+            with st.spinner("Indexing knowledge, retrieving evidence, and revising lessons..."):
+                try:
+                    response = client.chat.completions.create(
+                        model=OPENAI_MODEL,
+                        messages=st.session_state.messages,
+                    )
+
+                    answer = response.choices[0].message.content
+
+                except Exception as e:
+                    answer = "Error: Unable to process your request at this time."
+                    st.error(f"An error occurred: {e}")
+
+
+        
+
+            bot_reply = answer
+
+            with st.chat_message("assistant"):
+                st.markdown(bot_reply)
+
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": bot_reply
+            })
+
+            st.session_state.conv_history.append({
+                "role": "assistant", 
+                "content": bot_reply
+            })
+        
