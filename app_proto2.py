@@ -22,8 +22,7 @@ client = OpenAI(
     api_key=HUGGINGFACEHUB_ACCESS_TOKEN,
 )
 
-OPENAI_MODEL = st.secrets["OPENAI_MODEL"]
-OPENAI_MODEL = "openai/gpt-oss-120b:nebius"
+OPENAI_MODEL = "penai/gpt-oss-120b:novita"
 # =========================
 # PDF utilities
 # =========================
