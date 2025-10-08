@@ -22,8 +22,6 @@ client = OpenAI(
     api_key=HUGGINGFACEHUB_ACCESS_TOKEN,
 )
 
-OPENAI_MODEL = st.secrets["OPENAI_MODEL"]
-OPENAI_MODEL = "openai/gpt-oss-120b:nebius"
 # =========================
 # PDF utilities
 # =========================
@@ -89,7 +87,6 @@ def build_knowledge_index(knowledge_files,
         raise ValueError("No extractable text found in Knowledge PDFs.")
 
     corpus = [c.text for c in all_chunks]
-    
     vectorizer = TfidfVectorizer(
         lowercase=True,
         ngram_range=(1, 2),
@@ -97,9 +94,7 @@ def build_knowledge_index(knowledge_files,
         min_df=1,
         strip_accents="unicode",
     )
-
     matrix = vectorizer.fit_transform(corpus)
-    
     return RagIndex(vectorizer=vectorizer, matrix=matrix, chunks=all_chunks)
 
 def retrieve(index: RagIndex, query_text: str, top_k: int = 8) -> List[Tuple[Chunk, float]]:
@@ -111,34 +106,27 @@ def retrieve(index: RagIndex, query_text: str, top_k: int = 8) -> List[Tuple[Chu
     results = [(index.chunks[i], float(sims[i])) for i in top_idx]
     return results
 
+# =========================
+# Streamlit UI
+# =========================
+st.title("K-12 ML Support (with RAG)")
 
-# Frontend UI - Streamlit
-if "messages" not in st.session_state:
-    # messages passed to the LLM model
-    st.session_state.messages = [
-        {"role": "system", "content": "You are a helpful K-12 ML Support assistant."}
-    ]
+# adding tabs
+tab1, tab2, tab3 = st.tabs(["Customization Recommendations", "Customized Lesson Plan", "Companion Materials"])
 
-    # entire conversation history with user
-    st.session_state.conv_history = []
+with tab1:
+    st.markdown("Upload **Knowledge PDFs** (indexed) and **Lesson PDFs** (to revise/enhance).")
 
-pedagogy_block = ""
-final_user_prompt = ""
+    with st.sidebar:
+        st.subheader("RAG Settings")
+        k_top = st.slider("Top‑K chunks", 3, 20, 8, step=1)
+        chunk_size = st.slider("Chunk size (words)", 400, 1500, 900, step=50)
+        overlap = st.slider("Chunk overlap (words)", 50, 400, 180, step=10)
+        show_snippets = st.checkbox("Show retrieved snippets", value=True)
 
-# Static left in sidebar
-with st.sidebar:
-    # st.subheader("RAG Settings")
-    k_top = 8 #st.slider("Top‑K chunks", 3, 20, 8, step=1)
-    chunk_size = 900 #st.slider("Chunk size (words)", 400, 1500, 900, step=50)
-    overlap = 180 #st.slider("Chunk overlap (words)", 50, 400, 180, step=10)
-    # show_snippets = st.checkbox("Show retrieved snippets", value=True)
-    
-    st.markdown("### Upload PDFs")
-    knowledge_files = st.file_uploader(
-        "📘 Upload Knowledge PDFs (for context)", 
-        type="pdf", 
-        accept_multiple_files=True)
-    
+    knowledge_files = st.file_uploader("📘 Upload Knowledge PDFs (for context)", type="pdf", accept_multiple_files=True)
+    #lesson_files = st.file_uploader("📗 Upload Lesson PDFs (to revise or enhance)", type="pdf", accept_multiple_files=True)
+
     lesson_files = st.file_uploader(
         "📗 Upload Lesson PDFs (to revise or enhance)", 
         type="pdf", 
@@ -156,8 +144,6 @@ with st.sidebar:
         placeholder="E.g., 'Make the lesson easier for high school students' or 'Align with AI ethics principles'"
     )
 
-    show_snippets = st.checkbox("Show retrieved snippets", value=True)
-
     # Cache the RAG index so we don’t rebuild on every click
     @st.cache_resource(show_spinner=False)
     def _cached_index(_files_bytes_and_names, chunk_size, overlap):
@@ -173,10 +159,8 @@ with st.sidebar:
     if st.button("🔁 Revise Lessons"):
         if not knowledge_files:
             st.warning("Please upload at least one Knowledge PDF.")
-        
         elif not lesson_files:
             st.warning("Please upload at least one Lesson PDF.")
-        
         else:
             with st.spinner("Indexing knowledge, retrieving evidence, and revising lessons..."):
                 try:
@@ -189,8 +173,8 @@ with st.sidebar:
                     companion_text = extract_text_from_pdfs(companion_files) if companion_files else ""
 
                     # --- Validate ---
-                    if not lesson_text.strip():
-                        st.warning("No extractable text found in Lesson PDFs.")
+                    if not lesson_text.strip() and not companion_text.strip():
+                        st.warning("No extractable text found in Lesson PDFs or companion materials.")
                         st.stop()
 
                     # --- Combine lesson + companion for retrieval/prompt ---
@@ -201,7 +185,7 @@ with st.sidebar:
                         )
 
                     # --- Retrieve top‑K chunks using the combined text ---
-                    hits = retrieve(index, lesson_text, top_k=8)
+                    hits = retrieve(index, combined_lesson_text, top_k=k_top)
 
                     # --- Prepare numbered knowledge blocks with inline tags ---
                     numbered_blocks = []
@@ -228,34 +212,34 @@ with st.sidebar:
                     )
 
                     pedagogy_block = """
-                        You are revising lesson materials for real classrooms.
+    You are revising lesson materials for real classrooms.
 
-                        USE THE KNOWLEDGE SOURCES FIRST. When you assert a fact that comes from a source, add the inline tag (e.g., [K1]) right after the sentence.
-                        If multiple sources support a statement, include multiple tags (e.g., [K1][K3]).
+    USE THE KNOWLEDGE SOURCES FIRST. When you assert a fact that comes from a source, add the inline tag (e.g., [K1]) right after the sentence.
+    If multiple sources support a statement, include multiple tags (e.g., [K1][K3]).
 
-                        Deliverables:
-                        1) A revised lesson plan (concise and implementable today).
-                        2) A brief rationale (what changed and why) tied to sources via [Ki] tags.
-                        3) A short checklist for the teacher.
-                        4) Customized version of the companion materials, if any.
+    Deliverables:
+    1) A revised lesson plan (concise and implementable today).
+    2) A brief rationale (what changed and why) tied to sources via [Ki] tags.
+    3) A short checklist for the teacher.
+    4) Customized version of the companion materials, if any.
 
-                        Design principles:
-                        - Active, student-centered, inquiry-based, differentiated.
-                        - Offer either Gradual Release or 5E flow (teacher chooses).
-                        - Always include:
-                        • Summary/description
-                        • Grade level(s), subject(s), duration
-                        • Objectives & standards
-                        • Materials & student tech (if any)
-                        • Engaging hook
-                        • Procedure
-                        • Assessment
-                        • Differentiation & extensions
-                        • Glossary of key terms
-                        • Citations (use [Ki] tags inline)
+    Design principles:
+    - Active, student-centered, inquiry-based, differentiated.
+    - Offer either Gradual Release or 5E flow (teacher chooses).
+    - Always include:
+    • Summary/description
+    • Grade level(s), subject(s), duration
+    • Objectives & standards
+    • Materials & student tech (if any)
+    • Engaging hook
+    • Procedure
+    • Assessment
+    • Differentiation & extensions
+    • Glossary of key terms
+    • Citations (use [Ki] tags inline)
 
-                        If sources are insufficient, say so and propose safe, clearly-labeled general best practices (without fabricating citations).
-                        """
+    If sources are insufficient, say so and propose safe, clearly-labeled general best practices (without fabricating citations).
+    """
 
                     final_user_prompt = (
                         f"Knowledge sources (ranked):\n\n{knowledge_block_text}\n\n"
@@ -265,118 +249,27 @@ with st.sidebar:
                     if custom_instruction.strip():
                         final_user_prompt += f"Additional teacher instruction: {custom_instruction.strip()}\n\n"
 
-                    
-                    st.session_state.messages.append({
-                        "role": "user", 
-                        "content": final_user_prompt
-                    })
-                    
-                    st.session_state.conv_history.append({
-                        "role": "user", 
-                        "content": custom_instruction if custom_instruction.strip() else "Revise Lessons."
-                    })
+                    final_user_prompt += "Now produce the revised lesson, rationale, and checklist with inline [Ki] citations."
 
-                    try:
-                        # --- Call HF Router via OpenAI client ---
-                        response = client.chat.completions.create(
-                            model=OPENAI_MODEL,
-                            messages=[
-                                {"role": "system", "content": pedagogy_block},
-                                *st.session_state.messages,
-                                {"role": "user", "content": final_user_prompt},
-                            ],
-                        )
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-                    
+                    # --- Call HF Router via OpenAI client ---
+                    response = client.chat.completions.create(
+                        model="openai/gpt-oss-120b:novita",
+                        messages=[
+                            {"role": "system", "content": pedagogy_block},
+                            {"role": "user", "content": final_user_prompt},
+                        ],
+                    )
                     answer = response.choices[0].message.content
 
-                    bot_reply = answer
-
-                    st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": bot_reply
-                    })
-
-                    st.session_state.conv_history.append({
-                        "role": "assistant", 
-                        "content": bot_reply
-                    })
+                    st.success("📝 Revised Lesson (RAG‑enhanced)")
+                    st.markdown(answer)
 
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
 
-
-# Chat (right): Main area
-st.markdown("### K-12 ML Support")
-
-# adding tabs
-tab1, tab2, tab3 = st.tabs(["Customization Recommendations", "Customized Lesson Plan", "Companion Materials"])
-
-with tab1:
-    st.markdown("### Customization Recommendations")
-    chat_container = st.container()
 
 with tab2:
     st.markdown("### Customized Lesson Plan")
 
 with tab3:
     st.markdown("### Companion Materials")
-
-
-with chat_container:
-    for msg in st.session_state.conv_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-user_input = st.chat_input("Enter your message...")
-
-if user_input:
-
-    st.session_state.messages.append({
-        "role": "user", 
-        "content": user_input
-    })
-
-    st.session_state.conv_history.append({
-        "role": "user", 
-        "content": user_input
-    })
-    
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    if pedagogy_block == "" or final_user_prompt == "":
-        # --- Call HF Router via OpenAI client ---
-        with st.spinner("Indexing knowledge, retrieving evidence, and revising lessons..."):
-            try:
-                response = client.chat.completions.create(
-                    model=OPENAI_MODEL,
-                    messages=st.session_state.messages,
-                )
-
-                answer = response.choices[0].message.content
-
-            except Exception as e:
-                answer = "Error: Unable to process your request at this time."
-                st.error(f"An error occurred: {e}")
-
-
-       
-
-        bot_reply = answer
-
-        with st.chat_message("assistant"):
-            st.markdown(bot_reply)
-
-        st.session_state.messages.append({
-            "role": "assistant", 
-            "content": bot_reply
-        })
-
-        st.session_state.conv_history.append({
-            "role": "assistant", 
-            "content": bot_reply
-        })
-    
-
